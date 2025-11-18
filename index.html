@@ -1,46 +1,698 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Lulu Remote Servo Control</title>
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <style>
-    body { font-family: sans-serif; text-align:center; margin-top:80px; }
-    button { font-size: 1.4rem; margin: 10px; padding: 10px 30px; }
-  </style>
+    <title>Lulu Robot Control</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 700px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        .status-bar {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.connected {
+            background: #4CAF50;
+        }
+        
+        .status-dot.disconnected {
+            background: #f44336;
+            animation: none;
+        }
+        
+        .status-dot.recording {
+            background: #ff0000;
+            animation: pulse 0.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .control-section {
+            margin-bottom: 30px;
+        }
+        
+        .control-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        
+        button:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .start-button {
+            background: #4CAF50;
+        }
+        
+        .start-button:hover {
+            background: #45a049;
+        }
+        
+        .stop-button {
+            background: #f44336;
+        }
+        
+        .stop-button:hover {
+            background: #da190b;
+        }
+        
+        .record-button {
+            background: #ff5722;
+        }
+        
+        .record-button:hover {
+            background: #e64a19;
+        }
+        
+        .record-button.recording {
+            background: #ff0000;
+            animation: pulse 1s infinite;
+        }
+        
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .speed-control label {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            background: #ddd;
+            border-radius: 5px;
+            outline: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            width: 20px;
+            height: 20px;
+            background: #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        input[type="text"] {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            flex: 1;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .speed-value {
+            background: #f5f5f5;
+            padding: 5px 10px;
+            border-radius: 5px;
+            min-width: 60px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .pattern-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .pattern-button {
+            flex: 1;
+            min-width: 100px;
+        }
+        
+        .pattern-button.active {
+            background: #4CAF50;
+        }
+        
+        .log-area {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 15px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        
+        .robot-status {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 10px;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px;
+        }
+        
+        .status-label {
+            font-weight: 600;
+            color: #666;
+        }
+        
+        .status-value {
+            color: #333;
+        }
+        
+        .recording-controls {
+            background: #fff3cd;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 2px solid #ffc107;
+        }
+        
+        .recording-controls.active {
+            background: #ffebee;
+            border-color: #f44336;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .sequence-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .sequence-item {
+            background: #667eea;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .sequence-item:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+        
+        .recording-indicator {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #ffebee;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .recording-indicator.active {
+            display: flex;
+        }
+    </style>
 </head>
 <body>
-  <h2>🤖 Remote Servo Control</h2>
-  <p>Status: <span id="status">Connecting...</span></p>
+    <div class="container">
+        <h1>🤖 Lulu Robot Control</h1>
+        
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot disconnected" id="status-dot"></div>
+                <span id="status-text">Disconnected</span>
+            </div>
+            <div>
+                <span id="mqtt-status">MQTT: Offline</span>
+            </div>
+        </div>
 
-  <button onclick="sendAngle(60)">Move to 60°</button>
-  <button onclick="sendAngle(120)">Move to 120°</button>
+        <!-- Recording Indicator -->
+        <div class="recording-indicator" id="recording-indicator">
+            <div class="status-dot recording"></div>
+            <span><strong>RECORDING:</strong> <span id="recording-name">-</span> | Frame: <span id="frame-count">0</span></span>
+        </div>
+        
+        <!-- Keyframe Recording Section -->
+        <div class="control-section">
+            <h3>🎬 Keyframe Recording</h3>
+            <div class="recording-controls" id="recording-controls">
+                <div class="input-group">
+                    <input type="text" id="sequence-name" placeholder="Enter sequence name (e.g., 'dance')">
+                    <button class="record-button" onclick="startRecording()" id="start-rec-btn">
+                        🔴 Start Recording
+                    </button>
+                </div>
+                <div class="button-grid">
+                    <button onclick="recordFrame()" id="record-frame-btn" disabled>
+                        📸 Record Frame
+                    </button>
+                    <button onclick="stopRecording()" id="stop-rec-btn" disabled>
+                        ⏹ Stop & Save
+                    </button>
+                    <button onclick="listSequences()">
+                        📋 Refresh List
+                    </button>
+                </div>
+                <div style="margin-top: 10px;">
+                    <strong>Saved Sequences:</strong>
+                    <div class="sequence-list" id="sequence-list">
+                        <span style="color: #999; font-size: 12px;">Click "Refresh List" to load</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h3>🎮 Main Controls</h3>
+            <div class="button-grid">
+                <button class="start-button" onclick="sendCommand('start')">▶ START</button>
+                <button class="stop-button" onclick="sendCommand('stop')">⏹ STOP</button>
+                <button onclick="sendCommand('reset')">🔄 RESET</button>
+                <button onclick="sendCommand('status')">📊 STATUS</button>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h3>🎭 Movement Patterns</h3>
+            <div class="pattern-buttons">
+                <button class="pattern-button" onclick="setPattern('walk')" id="walk-btn">🚶 Walk</button>
+                <button class="pattern-button" onclick="setPattern('wave')" id="wave-btn">👋 Wave</button>
+                <button class="pattern-button" onclick="setPattern('dance')" id="dance-btn">💃 Dance</button>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h3>⚡ Speed Control</h3>
+            <div class="speed-control">
+                <label>Speed:</label>
+                <input type="range" id="speed-slider" min="10" max="200" value="50" 
+                       oninput="updateSpeed(this.value)">
+                <div class="speed-value" id="speed-value">0.05s</div>
+            </div>
+        </div>
+        
+        <div class="robot-status">
+            <div class="status-item">
+                <span class="status-label">Robot State:</span>
+                <span class="status-value" id="robot-state">Unknown</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Current Pattern:</span>
+                <span class="status-value" id="current-pattern">None</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Speed:</span>
+                <span class="status-value" id="current-speed">0.05</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Commands Sent:</span>
+                <span class="status-value" id="cmd-count">0</span>
+            </div>
+        </div>
+        
+        <div class="log-area" id="log">
+            System ready. Click connect to start...
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+            <button id="connect-btn" onclick="connectMQTT()">🔌 Connect</button>
+        </div>
+    </div>
 
-  <script>
-    const broker = "wss://0640aec6af724530bf88d7d8f3a6b10d.s1.eu.hivemq.cloud:8884/mqtt";
-    const options = {
-      username: "lulu-pi",
-      password: "Wang20198112@"
-    };
-    const topic = "lulu/hand/cmd";
-    const client = mqtt.connect(broker, options);
+    <script>
+        // MQTT Configuration
+        const BROKER = "0640aec6af724530bf88d7d8f3a6b10d.s1.eu.hivemq.cloud";
+        const PORT = 8884;  // WebSocket port
+        const USERNAME = "lulu-pi";
+        const PASSWORD = "Wang20198112@";
+        const COMMAND_TOPIC = "lulu/hand/cmd";
+        const STATUS_TOPIC = "lulu/hand/status";
+        
+        let client = null;
+        let connected = false;
+        let currentPattern = "walk";
+        let commandCount = 0;
+        let isRecording = false;
+        let recordedFrames = 0;
+        let currentSequenceName = "";
 
-    client.on("connect", () => {
-      document.getElementById("status").innerText = "✅ Connected";
-      console.log("Connected to HiveMQ Cloud");
-    });
+        function log(message) {
+            const logArea = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logArea.innerHTML += `[${timestamp}] ${message}<br>`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
 
-    client.on("error", (err) => {
-      document.getElementById("status").innerText = "❌ Error";
-      console.error("MQTT error:", err);
-    });
+        function updateStatus(status, text) {
+            document.getElementById('status-dot').className = 'status-dot ' + status;
+            document.getElementById('status-text').textContent = text;
+        }
 
-    function sendAngle(angle) {
-      const msg = JSON.stringify({ angle });
-      client.publish(topic, msg);
-      console.log("Sent:", msg);
-      document.getElementById("status").innerText = `📤 Sent angle ${angle}°`;
-    }
-  </script>
+        function connectMQTT() {
+            const brokerUrl = `wss://${BROKER}:${PORT}/mqtt`;
+            
+            const options = {
+                clean: true,
+                connectTimeout: 4000,
+                clientId: 'robot_controller_' + Math.random().toString(16).substr(2, 8),
+                username: USERNAME,
+                password: PASSWORD,
+                reconnectPeriod: 1000,
+            };
+
+            log('Connecting to MQTT broker...');
+            updateStatus('connecting', 'Connecting...');
+            
+            client = mqtt.connect(brokerUrl, options);
+            
+            client.on('connect', function () {
+                connected = true;
+                log('Connected to MQTT broker');
+                updateStatus('connected', 'Connected');
+                document.getElementById('mqtt-status').textContent = 'MQTT: Online';
+                document.getElementById('connect-btn').style.display = 'none';
+                
+                client.subscribe(STATUS_TOPIC, function (err) {
+                    if (!err) {
+                        log('Subscribed to status updates');
+                        listSequences();
+                    }
+                });
+            });
+
+            client.on('message', function (topic, message) {
+                try {
+                    const data = JSON.parse(message.toString());
+                    
+                    // Update robot status
+                    if (data.status) {
+                        document.getElementById('robot-state').textContent = data.status;
+                        
+                        if (data.status === 'recording') {
+                            handleRecordingStatus(data);
+                        } else if (data.status === 'saved') {
+                            handleSavedStatus(data);
+                        } else if (data.status === 'playing') {
+                            log(`▶ Playing: ${data.sequence_name} (${data.frame_count} frames)`);
+                        } else if (data.status === 'finished') {
+                            log(`✅ Finished playing: ${data.sequence_name}`);
+                        } else if (data.status === 'sequences_list') {
+                            displaySequences(data.sequences);
+                        }
+                    }
+                    
+                    if (data.pattern) {
+                        document.getElementById('current-pattern').textContent = data.pattern;
+                    }
+                    if (data.speed !== undefined) {
+                        document.getElementById('current-speed').textContent = data.speed;
+                    }
+                    
+                } catch (e) {
+                    console.error('Error parsing message:', e);
+                }
+            });
+
+            client.on('error', function(err) {
+                log('Connection error: ' + err.message);
+                updateStatus('disconnected', 'Error');
+                connected = false;
+            });
+
+            client.on('close', function() {
+                updateStatus('disconnected', 'Disconnected');
+                document.getElementById('mqtt-status').textContent = 'MQTT: Offline';
+                connected = false;
+            });
+        }
+
+        function sendCommand(command, extraData = {}) {
+            if (!connected) {
+                log('❌ Not connected to MQTT');
+                return;
+            }
+            
+            let message = {
+                command: command,
+                timestamp: Date.now(),
+                ...extraData
+            };
+            
+            if (command === 'start') {
+                message.pattern = currentPattern;
+            }
+            
+            client.publish(COMMAND_TOPIC, JSON.stringify(message));
+            commandCount++;
+            document.getElementById('cmd-count').textContent = commandCount;
+            log(`📤 Sent: ${command}`);
+        }
+
+        function startRecording() {
+            const seqName = document.getElementById('sequence-name').value.trim();
+            
+            if (!seqName) {
+                alert('Please enter a sequence name!');
+                return;
+            }
+            
+            if (!connected) {
+                log('❌ Not connected to MQTT');
+                return;
+            }
+            
+            sendCommand('start_recording', { name: seqName });
+            
+            isRecording = true;
+            recordedFrames = 0;
+            currentSequenceName = seqName;
+            
+            // Update UI
+            document.getElementById('start-rec-btn').disabled = true;
+            document.getElementById('record-frame-btn').disabled = false;
+            document.getElementById('stop-rec-btn').disabled = false;
+            document.getElementById('recording-controls').classList.add('active');
+            document.getElementById('recording-indicator').classList.add('active');
+            document.getElementById('recording-name').textContent = seqName;
+            document.getElementById('frame-count').textContent = '0';
+            
+            log(`🔴 Started recording: ${seqName}`);
+            log('⚠️ All servos are now relaxed - move robot to first pose');
+            log('📸 Click "Record Frame" when ready');
+        }
+
+        function recordFrame() {
+            if (!isRecording || !connected) {
+                return;
+            }
+            
+            sendCommand('record_frame');
+            recordedFrames++;
+            document.getElementById('frame-count').textContent = recordedFrames;
+            
+            log(`📸 Frame ${recordedFrames} captured`);
+            log('Move robot to next pose and click "Record Frame" again');
+        }
+
+        function stopRecording() {
+            if (!isRecording || !connected) {
+                return;
+            }
+            
+            sendCommand('stop_recording');
+            
+            isRecording = false;
+            
+            // Update UI
+            document.getElementById('start-rec-btn').disabled = false;
+            document.getElementById('record-frame-btn').disabled = true;
+            document.getElementById('stop-rec-btn').disabled = true;
+            document.getElementById('recording-controls').classList.remove('active');
+            document.getElementById('recording-indicator').classList.remove('active');
+            
+            log(`⏹ Stopped recording`);
+        }
+
+        function handleRecordingStatus(data) {
+            if (data.frame_count !== undefined) {
+                document.getElementById('frame-count').textContent = data.frame_count;
+            }
+        }
+
+        function handleSavedStatus(data) {
+            log(`✅ Saved: ${data.sequence_name} (${data.frame_count} frames)`);
+            log(`📁 Path: ${data.path}`);
+            setTimeout(listSequences, 500);
+        }
+
+        function listSequences() {
+            if (!connected) {
+                return;
+            }
+            sendCommand('list_sequences');
+        }
+
+        function displaySequences(sequences) {
+            const listDiv = document.getElementById('sequence-list');
+            
+            if (!sequences || sequences.length === 0) {
+                listDiv.innerHTML = '<span style="color: #999; font-size: 12px;">No sequences saved yet</span>';
+                return;
+            }
+            
+            listDiv.innerHTML = '';
+            sequences.forEach(seq => {
+                const item = document.createElement('div');
+                item.className = 'sequence-item';
+                item.textContent = seq;
+                item.onclick = () => playSequence(seq);
+                listDiv.appendChild(item);
+            });
+            
+            log(`📋 Loaded ${sequences.length} sequences`);
+        }
+
+        function playSequence(seqName) {
+            if (!connected) {
+                log('❌ Not connected to MQTT');
+                return;
+            }
+            
+            sendCommand('play_sequence', { name: seqName });
+            log(`▶ Playing sequence: ${seqName}`);
+        }
+
+        function setPattern(pattern) {
+            currentPattern = pattern;
+            
+            document.querySelectorAll('.pattern-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(pattern + '-btn').classList.add('active');
+            
+            log(`Pattern set to: ${pattern}`);
+            
+            if (document.getElementById('robot-state').textContent === 'walking') {
+                sendCommand('start');
+            }
+        }
+
+        function updateSpeed(value) {
+            const speed = value / 1000;
+            document.getElementById('speed-value').textContent = speed.toFixed(3) + 's';
+            
+            if (connected) {
+                const message = {
+                    command: 'speed',
+                    value: speed,
+                    timestamp: Date.now()
+                };
+                client.publish(COMMAND_TOPIC, JSON.stringify(message));
+                log(`⚡ Speed: ${speed}s`);
+            }
+        }
+
+        // Auto-connect on page load
+        window.addEventListener('load', function() {
+            setTimeout(connectMQTT, 500);
+        });
+    </script>
 </body>
 </html>
