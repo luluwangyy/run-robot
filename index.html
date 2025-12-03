@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Lulu Robot Control</title>
+    <title>Lulu Robot Control - Enhanced</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <style>
         * {
             margin: 0;
@@ -25,7 +27,7 @@
             border-radius: 20px;
             padding: 30px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 700px;
+            max-width: 1000px;
             width: 100%;
         }
         
@@ -36,6 +38,57 @@
             font-size: 2.5em;
         }
         
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 16px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .tab:hover {
+            color: #667eea;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
         .status-bar {
             background: #f5f5f5;
             border-radius: 10px;
@@ -44,6 +97,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         
         .status-indicator {
@@ -73,11 +128,193 @@
             animation: pulse 0.5s infinite;
         }
         
+        .status-dot.manual {
+            background: #ff9800;
+            animation: pulse 1s infinite;
+        }
+        
+        .status-dot.smiling {
+            background: #ffeb3b;
+            animation: pulse 0.5s infinite;
+        }
+        
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
         
+        /* Home Position Section */
+        .home-section {
+            background: #e8f5e9;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .home-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .position-display {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .servo-positions {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .servo-pos {
+            background: #f5f5f5;
+            padding: 8px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .servo-pos .id {
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .servo-pos .angle {
+            color: #333;
+            font-size: 14px;
+        }
+        
+        /* Recording Section */
+        .recording-section {
+            background: #fff3cd;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .recording-section.active {
+            background: #ffebee;
+        }
+        
+        .recording-mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+        }
+        
+        .mode-option {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .mode-option:hover {
+            border-color: #667eea;
+        }
+        
+        .mode-option.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .recording-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+        }
+        
+        .info-item {
+            text-align: center;
+        }
+        
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .info-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        /* Camera Section */
+        .camera-section {
+            background: #f9f9f9;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto 20px;
+            border-radius: 15px;
+            overflow: hidden;
+            background: #000;
+            display: none;
+        }
+        
+        .camera-container.active {
+            display: block;
+        }
+        
+        #webcam, #output-canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 15px;
+        }
+        
+        #output-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        
+        .smile-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            background: white;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .smile-indicator.active {
+            background: #4CAF50;
+            animation: pulse 1s infinite;
+        }
+        
+        /* Control Sections */
         .control-section {
             margin-bottom: 30px;
         }
@@ -127,7 +364,7 @@
             background: #4CAF50;
         }
         
-        .start-button:hover {
+        .start-button:hover:not(:disabled) {
             background: #45a049;
         }
         
@@ -135,21 +372,24 @@
             background: #f44336;
         }
         
-        .stop-button:hover {
+        .stop-button:hover:not(:disabled) {
             background: #da190b;
         }
         
+        .home-button {
+            background: #ff9800;
+        }
+        
+        .home-button:hover:not(:disabled) {
+            background: #f57c00;
+        }
+        
         .record-button {
-            background: #ff5722;
+            background: #e91e63;
         }
         
-        .record-button:hover {
-            background: #e64a19;
-        }
-        
-        .record-button.recording {
-            background: #ff0000;
-            animation: pulse 1s infinite;
+        .record-button:hover:not(:disabled) {
+            background: #c2185b;
         }
         
         .speed-control {
@@ -180,7 +420,7 @@
             cursor: pointer;
         }
         
-        input[type="text"] {
+        input[type="text"], input[type="number"] {
             padding: 10px;
             border: 2px solid #ddd;
             border-radius: 5px;
@@ -188,7 +428,7 @@
             flex: 1;
         }
         
-        input[type="text"]:focus {
+        input:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -215,6 +455,28 @@
         
         .pattern-button.active {
             background: #4CAF50;
+        }
+        
+        .sequence-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .sequence-item {
+            background: #667eea;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .sequence-item:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
         }
         
         .log-area {
@@ -253,59 +515,26 @@
             color: #333;
         }
         
-        .recording-controls {
-            background: #fff3cd;
+        .instructions {
+            background: #e3f2fd;
             border-radius: 10px;
             padding: 15px;
-            margin-bottom: 20px;
-            border: 2px solid #ffc107;
+            margin: 15px 0;
+            border-left: 4px solid #2196f3;
         }
         
-        .recording-controls.active {
-            background: #ffebee;
-            border-color: #f44336;
-        }
-        
-        .input-group {
-            display: flex;
-            gap: 10px;
+        .instructions h4 {
             margin-bottom: 10px;
+            color: #1976d2;
         }
         
-        .sequence-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-top: 10px;
+        .instructions ul {
+            margin-left: 20px;
+            color: #555;
         }
         
-        .sequence-item {
-            background: #667eea;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-        
-        .sequence-item:hover {
-            background: #5a67d8;
-            transform: translateY(-2px);
-        }
-        
-        .recording-indicator {
-            display: none;
-            align-items: center;
-            gap: 10px;
-            padding: 10px;
-            background: #ffebee;
-            border-radius: 5px;
-            margin-bottom: 10px;
-        }
-        
-        .recording-indicator.active {
-            display: flex;
+        .instructions li {
+            margin: 5px 0;
         }
     </style>
 </head>
@@ -321,92 +550,229 @@
             <div>
                 <span id="mqtt-status">MQTT: Offline</span>
             </div>
+            <div class="status-indicator">
+                <div class="status-dot disconnected" id="camera-status-dot"></div>
+                <span id="camera-status-text">Camera: Off</span>
+            </div>
+            <div class="status-indicator" id="manual-indicator" style="display: none;">
+                <div class="status-dot manual"></div>
+                <span>Manual Mode</span>
+            </div>
         </div>
 
-        <!-- Recording Indicator -->
-        <div class="recording-indicator" id="recording-indicator">
-            <div class="status-dot recording"></div>
-            <span><strong>RECORDING:</strong> <span id="recording-name">-</span> | Frame: <span id="frame-count">0</span></span>
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('control')">🎮 Control</button>
+            <button class="tab" onclick="switchTab('home')">🏠 Home Position</button>
+            <button class="tab" onclick="switchTab('recording')">🎬 Recording</button>
+            <button class="tab" onclick="switchTab('smile')">😊 Smile Detection</button>
         </div>
-        
-        <!-- Keyframe Recording Section -->
-        <div class="control-section">
-            <h3>🎬 Keyframe Recording</h3>
-            <div class="recording-controls" id="recording-controls">
-                <div class="input-group">
-                    <input type="text" id="sequence-name" placeholder="Enter sequence name (e.g., 'dance')">
-                    <button class="record-button" onclick="startRecording()" id="start-rec-btn">
-                        🔴 Start Recording
-                    </button>
-                </div>
+
+        <!-- Control Tab -->
+        <div class="tab-content active" id="control-tab">
+            <div class="control-section">
+                <h3>🎮 Main Controls</h3>
                 <div class="button-grid">
-                    <button onclick="recordFrame()" id="record-frame-btn" disabled>
-                        📸 Record Frame
+                    <button class="start-button" onclick="sendCommand('start')">▶ START</button>
+                    <button class="stop-button" onclick="sendCommand('smooth_stop')">⏹ SMOOTH STOP</button>
+                    <button onclick="sendCommand('reset')">🔄 RESET</button>
+                    <button onclick="sendCommand('status')">📊 STATUS</button>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h3>🎭 Movement Patterns</h3>
+                <div class="pattern-buttons">
+                    <button class="pattern-button" onclick="setPattern('wave')" id="wave-btn">👋 Wave</button>
+                    <button class="pattern-button" onclick="setPattern('dance')" id="dance-btn">💃 Dance</button>
+                    <button class="pattern-button" onclick="setPattern('happy')" id="happy-btn">😄 Happy</button>
+                    <button class="pattern-button" onclick="setPattern('nod')" id="nod-btn">🙆 Nod</button>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h3>⚡ Speed Control</h3>
+                <div class="speed-control">
+                    <label>Speed:</label>
+                    <input type="range" id="speed-slider" min="10" max="200" value="50" 
+                           oninput="updateSpeed(this.value)">
+                    <div class="speed-value" id="speed-value">0.05s</div>
+                </div>
+            </div>
+            
+            <div class="robot-status">
+                <div class="status-item">
+                    <span class="status-label">Robot State:</span>
+                    <span class="status-value" id="robot-state">Unknown</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Current Pattern:</span>
+                    <span class="status-value" id="current-pattern">None</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Speed:</span>
+                    <span class="status-value" id="current-speed">0.05</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Commands Sent:</span>
+                    <span class="status-value" id="cmd-count">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Home Position Tab -->
+        <div class="tab-content" id="home-tab">
+            <div class="home-section">
+                <h3>🏠 Home Position Setup</h3>
+                
+                <div class="instructions">
+                    <h4>📝 Instructions:</h4>
+                    <ul>
+                        <li>Click "Start Manual Mode" to disable servo torque</li>
+                        <li>Physically move the robot to your desired home position</li>
+                        <li>Click "Capture Position" to save as new home</li>
+                        <li>Use "Reset to Default" to restore factory settings</li>
+                    </ul>
+                </div>
+                
+                <div class="home-controls">
+                    <button class="home-button" onclick="startManualPositioning()" id="manual-mode-btn">
+                        🔧 Start Manual Mode
                     </button>
-                    <button onclick="stopRecording()" id="stop-rec-btn" disabled>
-                        ⏹ Stop & Save
+                    <button onclick="captureHomePosition()" id="capture-home-btn" disabled>
+                        📸 Capture Position
                     </button>
-                    <button onclick="listSequences()">
-                        📋 Refresh List
+                    <button onclick="resetHomePosition()">
+                        🔄 Reset to Default
+                    </button>
+                    <button onclick="testHomePosition()">
+                        🏃 Go to Home
                     </button>
                 </div>
-                <div style="margin-top: 10px;">
-                    <strong>Saved Sequences:</strong>
-                    <div class="sequence-list" id="sequence-list">
-                        <span style="color: #999; font-size: 12px;">Click "Refresh List" to load</span>
+                
+                <div class="position-display" id="position-display">
+                    <h4>Current Home Positions:</h4>
+                    <div class="servo-positions" id="home-positions">
+                        <!-- Will be populated dynamically -->
                     </div>
                 </div>
             </div>
         </div>
-        
-        <div class="control-section">
-            <h3>🎮 Main Controls</h3>
-            <div class="button-grid">
-                <button class="start-button" onclick="sendCommand('start')">▶ START</button>
-                <button class="stop-button" onclick="sendCommand('stop')">⏹ STOP</button>
-                <button onclick="sendCommand('reset')">🔄 RESET</button>
-                <button onclick="sendCommand('status')">📊 STATUS</button>
+
+        <!-- Recording Tab -->
+        <div class="tab-content" id="recording-tab">
+            <div class="recording-section" id="recording-section">
+                <h3>🎬 Sequence Recording</h3>
+                
+                <div class="recording-mode-selector">
+                    <div class="mode-option selected" onclick="selectRecordingMode('manual')" id="manual-mode">
+                        <strong>📷 Manual</strong><br>
+                        <small>Frame-by-frame capture</small>
+                    </div>
+                    <div class="mode-option" onclick="selectRecordingMode('continuous')" id="continuous-mode">
+                        <strong>🎥 Continuous</strong><br>
+                        <small>Automatic motion capture</small>
+                    </div>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <input type="text" id="sequence-name" placeholder="Enter sequence name (e.g., 'dance')">
+                    <div style="margin-top: 10px;">
+                        <label>Sample Rate (continuous mode):</label>
+                        <input type="number" id="sample-rate" value="10" min="1" max="30" style="width: 80px;">
+                        <span>frames/sec</span>
+                    </div>
+                </div>
+                
+                <div class="button-grid">
+                    <button class="record-button" onclick="startRecording()" id="start-rec-btn">
+                        🔴 Start Recording
+                    </button>
+                    <button onclick="recordFrame()" id="record-frame-btn" disabled>
+                        📸 Capture Frame
+                    </button>
+                    <button class="stop-button" onclick="stopRecording()" id="stop-rec-btn" disabled>
+                        ⏹ Stop & Save
+                    </button>
+                </div>
+                
+                <div class="recording-info" id="recording-info" style="display: none;">
+                    <div class="info-item">
+                        <div class="info-label">Mode</div>
+                        <div class="info-value" id="rec-mode">Manual</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Frames</div>
+                        <div class="info-value" id="frame-count">0</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Duration</div>
+                        <div class="info-value" id="rec-duration">0s</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong>Saved Sequences:</strong>
+                        <button onclick="listSequences()" style="padding: 5px 15px;">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                    <div class="sequence-list" id="sequence-list">
+                        <span style="color: #999; font-size: 12px;">No sequences loaded</span>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <label>Playback Speed:</label>
+                    <input type="range" id="playback-speed" min="0.1" max="2" value="1" step="0.1"
+                           oninput="document.getElementById('playback-speed-value').textContent = this.value + 'x'">
+                    <span id="playback-speed-value">1x</span>
+                </div>
             </div>
         </div>
-        
-        <div class="control-section">
-            <h3>🎭 Movement Patterns</h3>
-            <div class="pattern-buttons">
-                <button class="pattern-button" onclick="setPattern('walk')" id="walk-btn">🚶 Walk</button>
-                <button class="pattern-button" onclick="setPattern('wave')" id="wave-btn">👋 Wave</button>
-                <button class="pattern-button" onclick="setPattern('dance')" id="dance-btn">💃 Dance</button>
+
+        <!-- Smile Detection Tab -->
+        <div class="tab-content" id="smile-tab">
+            <div class="camera-section">
+                <h3>😊 Smile Detection Control</h3>
+                
+                <div class="camera-container" id="camera-container">
+                    <video id="webcam" autoplay playsinline></video>
+                    <canvas id="output-canvas"></canvas>
+                    <div class="smile-indicator" id="smile-indicator">😐</div>
+                </div>
+                
+                <div class="button-grid">
+                    <button onclick="toggleCamera()" id="camera-btn">📸 Start Camera</button>
+                    <button onclick="calibrateSmile()">🎯 Calibrate</button>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <label>
+                        <input type="checkbox" id="smile-enable" onchange="toggleSmileDetection()">
+                        Enable smile trigger
+                    </label>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <label>Threshold: <span id="threshold-value">60%</span></label>
+                    <input type="range" id="smile-threshold" min="10" max="90" value="60" 
+                           oninput="updateSmileThreshold(this.value)">
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <label>Trigger Pattern:</label>
+                    <select id="smile-pattern" style="padding: 8px; border-radius: 5px; border: 2px solid #ddd;">
+                        <option value="wave">Wave</option>
+                        <option value="dance">Dance</option>
+                        <option value="happy">Happy</option>
+                        <option value="nod">Nod</option>
+                    </select>
+                </div>
             </div>
         </div>
-        
-        <div class="control-section">
-            <h3>⚡ Speed Control</h3>
-            <div class="speed-control">
-                <label>Speed:</label>
-                <input type="range" id="speed-slider" min="10" max="200" value="50" 
-                       oninput="updateSpeed(this.value)">
-                <div class="speed-value" id="speed-value">0.05s</div>
-            </div>
-        </div>
-        
-        <div class="robot-status">
-            <div class="status-item">
-                <span class="status-label">Robot State:</span>
-                <span class="status-value" id="robot-state">Unknown</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Current Pattern:</span>
-                <span class="status-value" id="current-pattern">None</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Speed:</span>
-                <span class="status-value" id="current-speed">0.05</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Commands Sent:</span>
-                <span class="status-value" id="cmd-count">0</span>
-            </div>
-        </div>
-        
+
         <div class="log-area" id="log">
             System ready. Click connect to start...
         </div>
@@ -419,20 +785,467 @@
     <script>
         // MQTT Configuration
         const BROKER = "0640aec6af724530bf88d7d8f3a6b10d.s1.eu.hivemq.cloud";
-        const PORT = 8884;  // WebSocket port
+        const PORT = 8884;
         const USERNAME = "lulu-pi";
         const PASSWORD = "Wang20198112@";
         const COMMAND_TOPIC = "lulu/hand/cmd";
         const STATUS_TOPIC = "lulu/hand/status";
         
+        // Global variables
         let client = null;
         let connected = false;
-        let currentPattern = "walk";
+        let currentPattern = "wave";
         let commandCount = 0;
         let isRecording = false;
+        let recordingMode = 'manual';
         let recordedFrames = 0;
+        let recordingStartTime = null;
         let currentSequenceName = "";
+        let isManualMode = false;
+        let homePositions = {};
+        
+        // Camera variables
+        let camera = null;
+        let faceMesh = null;
+        let cameraActive = false;
+        let smileDetectionEnabled = false;
+        let smileThreshold = 60;
+        let lastTriggerTime = 0;
+        let calibrationMode = false;
+        let maxSmileScore = 0;
 
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        // Home position functions
+        function startManualPositioning() {
+            if (!connected) {
+                log('❌ Not connected to MQTT');
+                return;
+            }
+            
+            sendCommand('set_home_position');
+            isManualMode = true;
+            
+            document.getElementById('manual-mode-btn').disabled = true;
+            document.getElementById('capture-home-btn').disabled = false;
+            document.getElementById('manual-indicator').style.display = 'flex';
+            
+            log('🔧 Manual positioning mode activated');
+            log('Move robot to desired home position...');
+        }
+
+        function captureHomePosition() {
+            if (!connected) {
+                log('❌ Not connected to MQTT');
+                return;
+            }
+            
+            sendCommand('capture_home');
+            isManualMode = false;
+            
+            document.getElementById('manual-mode-btn').disabled = false;
+            document.getElementById('capture-home-btn').disabled = true;
+            document.getElementById('manual-indicator').style.display = 'none';
+            
+            log('📸 Capturing home position...');
+        }
+
+        function resetHomePosition() {
+            if (!connected) {
+                log('❌ Not connected to MQTT');
+                return;
+            }
+            
+            if (confirm('Reset to default home position?')) {
+                sendCommand('reset_home');
+                log('🔄 Resetting to default home position');
+            }
+        }
+
+        function testHomePosition() {
+            if (!connected) {
+                log('❌ Not connected to MQTT');
+                return;
+            }
+            
+            sendCommand('reset');
+            log('🏃 Moving to home position');
+        }
+
+        function updateHomePositionDisplay(positions) {
+            const container = document.getElementById('home-positions');
+            container.innerHTML = '';
+            
+            for (const [id, angle] of Object.entries(positions)) {
+                const div = document.createElement('div');
+                div.className = 'servo-pos';
+                div.innerHTML = `
+                    <div class="id">Servo ${id}</div>
+                    <div class="angle">${parseFloat(angle).toFixed(1)}°</div>
+                `;
+                container.appendChild(div);
+            }
+            
+            homePositions = positions;
+        }
+
+        // Recording functions
+        function selectRecordingMode(mode) {
+            recordingMode = mode;
+            document.querySelectorAll('.mode-option').forEach(opt => opt.classList.remove('selected'));
+            document.getElementById(`${mode}-mode`).classList.add('selected');
+            
+            // Show/hide frame button based on mode
+            if (mode === 'continuous') {
+                document.getElementById('record-frame-btn').style.display = 'none';
+            } else {
+                document.getElementById('record-frame-btn').style.display = 'block';
+            }
+        }
+
+        function startRecording() {
+            const seqName = document.getElementById('sequence-name').value.trim();
+            
+            if (!seqName) {
+                alert('Please enter a sequence name!');
+                return;
+            }
+            
+            if (!connected) {
+                log('❌ Not connected to MQTT');
+                return;
+            }
+            
+            const sampleRate = parseInt(document.getElementById('sample-rate').value);
+            
+            sendCommand('start_recording', { 
+                name: seqName, 
+                mode: recordingMode,
+                sample_rate: sampleRate 
+            });
+            
+            isRecording = true;
+            recordedFrames = 0;
+            recordingStartTime = Date.now();
+            currentSequenceName = seqName;
+            
+            // Update UI
+            document.getElementById('start-rec-btn').disabled = true;
+            document.getElementById('stop-rec-btn').disabled = false;
+            document.getElementById('recording-section').classList.add('active');
+            document.getElementById('recording-info').style.display = 'grid';
+            document.getElementById('rec-mode').textContent = recordingMode === 'continuous' ? 'Continuous' : 'Manual';
+            document.getElementById('frame-count').textContent = '0';
+            
+            if (recordingMode === 'manual') {
+                document.getElementById('record-frame-btn').disabled = false;
+                log(`📷 Manual recording started: ${seqName}`);
+                log('Position robot and click "Capture Frame"');
+            } else {
+                document.getElementById('record-frame-btn').disabled = true;
+                log(`🎥 Continuous recording started: ${seqName}`);
+                log('Move robot smoothly - recording automatically');
+            }
+            
+            // Start duration counter
+            updateRecordingDuration();
+        }
+
+        function updateRecordingDuration() {
+            if (isRecording && recordingStartTime) {
+                const duration = Math.floor((Date.now() - recordingStartTime) / 1000);
+                document.getElementById('rec-duration').textContent = `${duration}s`;
+                setTimeout(updateRecordingDuration, 1000);
+            }
+        }
+
+        function recordFrame() {
+            if (!isRecording || recordingMode !== 'manual' || !connected) {
+                return;
+            }
+            
+            sendCommand('record_frame');
+            recordedFrames++;
+            document.getElementById('frame-count').textContent = recordedFrames;
+            
+            log(`📸 Frame ${recordedFrames} captured`);
+        }
+
+        function stopRecording() {
+            if (!isRecording || !connected) {
+                return;
+            }
+            
+            sendCommand('stop_recording');
+            
+            isRecording = false;
+            recordingStartTime = null;
+            
+            // Update UI
+            document.getElementById('start-rec-btn').disabled = false;
+            document.getElementById('record-frame-btn').disabled = true;
+            document.getElementById('stop-rec-btn').disabled = true;
+            document.getElementById('recording-section').classList.remove('active');
+            document.getElementById('recording-info').style.display = 'none';
+            
+            log(`⏹ Recording stopped`);
+        }
+
+        function listSequences() {
+            if (!connected) {
+                return;
+            }
+            sendCommand('list_sequences');
+        }
+
+        function displaySequences(sequences) {
+            const listDiv = document.getElementById('sequence-list');
+            
+            if (!sequences || sequences.length === 0) {
+                listDiv.innerHTML = '<span style="color: #999; font-size: 12px;">No sequences saved yet</span>';
+                return;
+            }
+            
+            listDiv.innerHTML = '';
+            sequences.forEach(seq => {
+                const item = document.createElement('div');
+                item.className = 'sequence-item';
+                item.textContent = seq;
+                item.onclick = () => playSequence(seq);
+                listDiv.appendChild(item);
+            });
+            
+            log(`📋 Loaded ${sequences.length} sequences`);
+        }
+
+        function playSequence(seqName) {
+            if (!connected) {
+                log('❌ Not connected to MQTT');
+                return;
+            }
+            
+            const speed = parseFloat(document.getElementById('playback-speed').value);
+            sendCommand('play_sequence', { name: seqName, speed: speed });
+            log(`▶ Playing sequence: ${seqName} (${speed}x speed)`);
+        }
+
+        // Camera and smile detection
+        function initializeFaceMesh() {
+            if (!faceMesh) {
+                faceMesh = new FaceMesh({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                    }
+                });
+
+                faceMesh.setOptions({
+                    maxNumFaces: 1,
+                    refineLandmarks: true,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+
+                faceMesh.onResults(onFaceResults);
+            }
+        }
+
+        function calculateSmileScore(landmarks) {
+            if (!landmarks || landmarks.length === 0) return 0;
+
+            const leftMouthCorner = landmarks[61];
+            const rightMouthCorner = landmarks[291];
+            const upperLip = landmarks[13];
+            const lowerLip = landmarks[14];
+            
+            const mouthWidth = Math.sqrt(
+                Math.pow(rightMouthCorner.x - leftMouthCorner.x, 2) +
+                Math.pow(rightMouthCorner.y - leftMouthCorner.y, 2)
+            );
+            
+            const mouthHeight = Math.sqrt(
+                Math.pow(upperLip.x - lowerLip.x, 2) +
+                Math.pow(upperLip.y - lowerLip.y, 2)
+            );
+            
+            const aspectRatio = mouthWidth / (mouthHeight + 0.001);
+            const avgMouthCornerY = (leftMouthCorner.y + rightMouthCorner.y) / 2;
+            const lipCenterY = (upperLip.y + lowerLip.y) / 2;
+            const cornerLift = lipCenterY - avgMouthCornerY;
+            
+            let smileScore = 0;
+            
+            if (aspectRatio > 3.0) {
+                smileScore += Math.min(50, (aspectRatio - 3.0) * 25);
+            }
+            
+            if (cornerLift > 0) {
+                smileScore += Math.min(50, cornerLift * 500);
+            }
+            
+            return Math.min(100, Math.max(0, smileScore));
+        }
+
+        function onFaceResults(results) {
+            const canvas = document.getElementById('output-canvas');
+            const ctx = canvas.getContext('2d');
+            const video = document.getElementById('webcam');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const landmarks = results.multiFaceLandmarks[0];
+                
+                const smileScore = calculateSmileScore(landmarks);
+                updateSmileUI(smileScore);
+                
+                if (calibrationMode) {
+                    maxSmileScore = Math.max(maxSmileScore, smileScore);
+                }
+                
+                if (smileDetectionEnabled && smileScore > smileThreshold && connected) {
+                    const now = Date.now();
+                    if (now - lastTriggerTime > 3000) {
+                        triggerSmileAction(smileScore);
+                        lastTriggerTime = now;
+                    }
+                }
+            }
+        }
+
+        function updateSmileUI(smileScore) {
+            const indicator = document.getElementById('smile-indicator');
+            
+            if (smileScore > smileThreshold) {
+                indicator.textContent = '😄';
+                indicator.classList.add('active');
+            } else if (smileScore > 30) {
+                indicator.textContent = '🙂';
+                indicator.classList.remove('active');
+            } else {
+                indicator.textContent = '😐';
+                indicator.classList.remove('active');
+            }
+        }
+
+        async function toggleCamera() {
+            if (!cameraActive) {
+                try {
+                    const video = document.getElementById('webcam');
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { width: 640, height: 480 } 
+                    });
+                    video.srcObject = stream;
+                    
+                    if (!faceMesh) {
+                        initializeFaceMesh();
+                    }
+                    
+                    camera = new Camera(video, {
+                        onFrame: async () => {
+                            if (cameraActive && faceMesh) {
+                                await faceMesh.send({ image: video });
+                            }
+                        },
+                        width: 640,
+                        height: 480
+                    });
+                    
+                    camera.start();
+                    cameraActive = true;
+                    
+                    document.getElementById('camera-container').classList.add('active');
+                    document.getElementById('camera-btn').textContent = '⏹ Stop Camera';
+                    document.getElementById('camera-status-dot').classList.add('connected');
+                    document.getElementById('camera-status-text').textContent = 'Camera: On';
+                    
+                    log('📸 Camera started');
+                } catch (error) {
+                    log(`Camera error: ${error.message}`);
+                }
+            } else {
+                stopCamera();
+            }
+        }
+
+        function stopCamera() {
+            if (camera) {
+                camera.stop();
+                camera = null;
+            }
+            
+            cameraActive = false;
+            
+            const video = document.getElementById('webcam');
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            
+            document.getElementById('camera-container').classList.remove('active');
+            document.getElementById('camera-btn').textContent = '📸 Start Camera';
+            document.getElementById('camera-status-dot').classList.remove('connected');
+            document.getElementById('camera-status-text').textContent = 'Camera: Off';
+            
+            log('📸 Camera stopped');
+        }
+
+        function toggleSmileDetection() {
+            smileDetectionEnabled = document.getElementById('smile-enable').checked;
+            log(smileDetectionEnabled ? '😊 Smile detection enabled' : '😊 Smile detection disabled');
+            
+            if (smileDetectionEnabled && !cameraActive) {
+                toggleCamera();
+            }
+        }
+
+        function updateSmileThreshold(value) {
+            smileThreshold = parseInt(value);
+            document.getElementById('threshold-value').textContent = `${smileThreshold}%`;
+        }
+
+        function calibrateSmile() {
+            if (!cameraActive) {
+                log('❌ Please start camera first');
+                return;
+            }
+            
+            calibrationMode = true;
+            maxSmileScore = 0;
+            log('🎯 Calibration started. Smile wide for 3 seconds...');
+            
+            setTimeout(() => {
+                calibrationMode = false;
+                if (maxSmileScore > 0) {
+                    const newThreshold = Math.round(maxSmileScore * 0.7);
+                    document.getElementById('smile-threshold').value = newThreshold;
+                    updateSmileThreshold(newThreshold);
+                    log(`✅ Calibration complete. Threshold set to ${newThreshold}%`);
+                }
+            }, 3000);
+        }
+
+        function triggerSmileAction(smileScore) {
+            const pattern = document.getElementById('smile-pattern').value;
+            
+            sendCommand('smile_trigger', {
+                pattern: pattern,
+                smile_score: smileScore
+            });
+            
+            log(`😄 Smile triggered: ${pattern} (${Math.round(smileScore)}%)`);
+        }
+
+        // MQTT functions
         function log(message) {
             const logArea = document.getElementById('log');
             const timestamp = new Date().toLocaleTimeString();
@@ -481,20 +1294,33 @@
                 try {
                     const data = JSON.parse(message.toString());
                     
-                    // Update robot status
                     if (data.status) {
                         document.getElementById('robot-state').textContent = data.status;
                         
-                        if (data.status === 'recording') {
-                            handleRecordingStatus(data);
+                        if (data.status === 'manual_positioning') {
+                            log('⚠️ Torque disabled - position robot manually');
+                        } else if (data.status === 'home_captured') {
+                            log('✅ Home position captured');
+                            if (data.positions) {
+                                updateHomePositionDisplay(data.positions);
+                            }
+                        } else if (data.status === 'home_reset') {
+                            log('✅ Home position reset to defaults');
+                        } else if (data.status === 'recording_manual' || data.status === 'recording_continuous') {
+                            if (data.frame_count !== undefined) {
+                                document.getElementById('frame-count').textContent = data.frame_count;
+                            }
+                        } else if (data.status === 'frame_recorded') {
+                            document.getElementById('frame-count').textContent = data.frame_count;
                         } else if (data.status === 'saved') {
-                            handleSavedStatus(data);
-                        } else if (data.status === 'playing') {
-                            log(`▶ Playing: ${data.sequence_name} (${data.frame_count} frames)`);
-                        } else if (data.status === 'finished') {
-                            log(`✅ Finished playing: ${data.sequence_name}`);
+                            log(`✅ Saved: ${data.sequence_name} (${data.frame_count} frames)`);
+                            setTimeout(listSequences, 500);
                         } else if (data.status === 'sequences_list') {
                             displaySequences(data.sequences);
+                        } else if (data.status === 'detailed') {
+                            if (data.home_positions) {
+                                updateHomePositionDisplay(data.home_positions);
+                            }
                         }
                     }
                     
@@ -545,120 +1371,6 @@
             log(`📤 Sent: ${command}`);
         }
 
-        function startRecording() {
-            const seqName = document.getElementById('sequence-name').value.trim();
-            
-            if (!seqName) {
-                alert('Please enter a sequence name!');
-                return;
-            }
-            
-            if (!connected) {
-                log('❌ Not connected to MQTT');
-                return;
-            }
-            
-            sendCommand('start_recording', { name: seqName });
-            
-            isRecording = true;
-            recordedFrames = 0;
-            currentSequenceName = seqName;
-            
-            // Update UI
-            document.getElementById('start-rec-btn').disabled = true;
-            document.getElementById('record-frame-btn').disabled = false;
-            document.getElementById('stop-rec-btn').disabled = false;
-            document.getElementById('recording-controls').classList.add('active');
-            document.getElementById('recording-indicator').classList.add('active');
-            document.getElementById('recording-name').textContent = seqName;
-            document.getElementById('frame-count').textContent = '0';
-            
-            log(`🔴 Started recording: ${seqName}`);
-            log('⚠️ All servos are now relaxed - move robot to first pose');
-            log('📸 Click "Record Frame" when ready');
-        }
-
-        function recordFrame() {
-            if (!isRecording || !connected) {
-                return;
-            }
-            
-            sendCommand('record_frame');
-            recordedFrames++;
-            document.getElementById('frame-count').textContent = recordedFrames;
-            
-            log(`📸 Frame ${recordedFrames} captured`);
-            log('Move robot to next pose and click "Record Frame" again');
-        }
-
-        function stopRecording() {
-            if (!isRecording || !connected) {
-                return;
-            }
-            
-            sendCommand('stop_recording');
-            
-            isRecording = false;
-            
-            // Update UI
-            document.getElementById('start-rec-btn').disabled = false;
-            document.getElementById('record-frame-btn').disabled = true;
-            document.getElementById('stop-rec-btn').disabled = true;
-            document.getElementById('recording-controls').classList.remove('active');
-            document.getElementById('recording-indicator').classList.remove('active');
-            
-            log(`⏹ Stopped recording`);
-        }
-
-        function handleRecordingStatus(data) {
-            if (data.frame_count !== undefined) {
-                document.getElementById('frame-count').textContent = data.frame_count;
-            }
-        }
-
-        function handleSavedStatus(data) {
-            log(`✅ Saved: ${data.sequence_name} (${data.frame_count} frames)`);
-            log(`📁 Path: ${data.path}`);
-            setTimeout(listSequences, 500);
-        }
-
-        function listSequences() {
-            if (!connected) {
-                return;
-            }
-            sendCommand('list_sequences');
-        }
-
-        function displaySequences(sequences) {
-            const listDiv = document.getElementById('sequence-list');
-            
-            if (!sequences || sequences.length === 0) {
-                listDiv.innerHTML = '<span style="color: #999; font-size: 12px;">No sequences saved yet</span>';
-                return;
-            }
-            
-            listDiv.innerHTML = '';
-            sequences.forEach(seq => {
-                const item = document.createElement('div');
-                item.className = 'sequence-item';
-                item.textContent = seq;
-                item.onclick = () => playSequence(seq);
-                listDiv.appendChild(item);
-            });
-            
-            log(`📋 Loaded ${sequences.length} sequences`);
-        }
-
-        function playSequence(seqName) {
-            if (!connected) {
-                log('❌ Not connected to MQTT');
-                return;
-            }
-            
-            sendCommand('play_sequence', { name: seqName });
-            log(`▶ Playing sequence: ${seqName}`);
-        }
-
         function setPattern(pattern) {
             currentPattern = pattern;
             
@@ -668,10 +1380,6 @@
             document.getElementById(pattern + '-btn').classList.add('active');
             
             log(`Pattern set to: ${pattern}`);
-            
-            if (document.getElementById('robot-state').textContent === 'walking') {
-                sendCommand('start');
-            }
         }
 
         function updateSpeed(value) {
@@ -679,12 +1387,7 @@
             document.getElementById('speed-value').textContent = speed.toFixed(3) + 's';
             
             if (connected) {
-                const message = {
-                    command: 'speed',
-                    value: speed,
-                    timestamp: Date.now()
-                };
-                client.publish(COMMAND_TOPIC, JSON.stringify(message));
+                sendCommand('speed', { value: speed });
                 log(`⚡ Speed: ${speed}s`);
             }
         }
@@ -692,6 +1395,13 @@
         // Auto-connect on page load
         window.addEventListener('load', function() {
             setTimeout(connectMQTT, 500);
+        });
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', function() {
+            if (camera) {
+                stopCamera();
+            }
         });
     </script>
 </body>
